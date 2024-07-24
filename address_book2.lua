@@ -1,3 +1,5 @@
+local require = ...
+
 local printer = peripheral.find("printer")
 local completion = require("cc.completion")
 local chat_box = peripheral.find("chatBox")
