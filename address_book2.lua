@@ -1,4 +1,5 @@
 local require = ...
+print(require)
 
 local printer = peripheral.find("printer")
 local completion = require("cc.completion")
