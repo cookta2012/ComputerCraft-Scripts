@@ -1,4 +1,4 @@
-
+---------------------- Bignwarning haked
 -- Global table to cache loaded scripts
 local loadedScripts = {}
 
