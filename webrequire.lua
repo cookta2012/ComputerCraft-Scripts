@@ -1,7 +1,5 @@
 -- webrequire.lua
 
-local require = ...
-
 -- Global table to cache loaded scripts
 local loadedScripts = {}
 
@@ -10,70 +8,87 @@ local function getBasePath(url)
     return url:match("(.-)[^/]+$")
 end
 
--- Function to convert dot notation to forward slashes
+-- Function to convert dot notation to forward slashes and ensure .lua extension
 local function convertToPath(module)
-    return module:gsub("%.", "/")
+    -- Strip .lua extension if it exists
+    local hasLuaExtension = module:match("%.lua$")
+    if hasLuaExtension then
+        module = module:sub(1, -5)
+    end
+    
+    -- Convert dot notation to forward slashes
+    local path = module:gsub("%.", "/")
+    
+    -- Add .lua extension back
+    path = path .. ".lua"
+    
+    return path
 end
 
--- Custom webrequire function
-local function webrequire(module)
-    -- Convert the module name to a URL-friendly path
-    local url = module
-    if not url:match("^http") then
-        url = convertToPath(module)
-    end
-
-    -- Check if the script is already cached
-    if loadedScripts[url] then
-        return loadedScripts[url]
-    end
-
-    -- Derive the base path for the URL
-    local basePath = getBasePath(url)
-
-    -- Define the custom header to be added to each script
-    local header = string.format([[
-        local basePath = %q
-        local global_require = ...
-        local function modified_require(module)
-            module = module:gsub("%%.", "/") -- Convert dot notation to forward slashes
-            if module:sub(1, 4) == "http" or module:sub(1, 1) == "/" then
-                return global_require(module)
-            else
-                return global_require(basePath .. module)
-            end
+-- Function to create a custom webrequire function
+local function new(globalRequire)
+    -- Custom webrequire function
+    local function webrequire(module)
+        -- Convert the module name to a URL-friendly path
+        local url = module
+        if not url:match("^http") then
+            url = convertToPath(module)
         end
-        require = modified_require
-    ]], basePath)
 
-    -- Try to fetch the script from the given URL
-    local response = http.get(url)
-    if not response then
-        -- If fetching fails, fall back to the regular require
-        return require(module)
+        -- Check if the script is already cached
+        if loadedScripts[url] then
+            return loadedScripts[url]
+        end
+
+        -- Derive the base path for the URL
+        local basePath = getBasePath(url)
+
+        -- Define the custom header to be added to each script
+        local header = string.format([[
+            local basePath = %q
+            local global_require = ...
+            local function modified_require(module)
+                module = module:gsub("%%.", "/") -- Convert dot notation to forward slashes
+                if module:sub(1, 4) == "http" or module:sub(1, 1) == "/" then
+                    return global_require(module)
+                else
+                    return global_require(basePath .. module)
+                end
+            end
+            require = modified_require
+        ]], basePath)
+
+        -- Try to fetch the script from the given URL
+        local response = http.get(url)
+        if not response then
+            -- If fetching fails, fall back to the regular require
+            return globalRequire(module)
+        end
+
+        -- Read the script content
+        local script_content = response.readAll()
+        response.close()
+
+        -- Prepend the header to the script content
+        local modified_script = header .. "\n" .. script_content
+
+        -- Load and execute the modified script
+        local script_chunk, load_err = loadstring(modified_script)
+        if not script_chunk then
+            error("Failed to load script: " .. load_err)
+        end
+
+        -- Execute the script, passing the global require function
+        local result = script_chunk(globalRequire)
+
+        -- Cache the result
+        loadedScripts[url] = result
+
+        return result
     end
 
-    -- Read the script content
-    local script_content = response.readAll()
-    response.close()
-
-    -- Prepend the header to the script content
-    local modified_script = header .. "\n" .. script_content
-
-    -- Load and execute the modified script
-    local script_chunk, load_err = loadstring(modified_script)
-    if not script_chunk then
-        error("Failed to load script: " .. load_err)
-    end
-
-    -- Execute the script, passing the global require function
-    local result = script_chunk(require)
-
-    -- Cache the result
-    loadedScripts[url] = result
-
-    return result
+    return webrequire
 end
 
--- Return the webrequire function to be used as a module
-return webrequire
+-- Return the function to create a webrequire function
+return new
