@@ -7,6 +7,12 @@ local function getBasePath(url)
     return url:match("(.-)[^/]+$")
 end
 
+local function dump(data)
+    local file:open("dump.bin","w")
+    file:write(textutils.seralise(data))
+    file:close()
+end
+
 -- Function to convert dot notation to forward slashes
 local function convertToPath(module)
     return module:gsub("%.", "/")
