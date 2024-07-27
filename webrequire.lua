@@ -66,7 +66,7 @@ local function createWebRequire(globalRequire)
         local modified_script = header .. "\n" .. script_content
 
         -- Load and execute the modified script
-        print(modified_script)
+        dump(modified_script)
         local script_chunk, load_err = loadstring(modified_script)
         if not script_chunk then
             error("Failed to load script: " .. load_err)
