@@ -28,7 +28,6 @@ local function createWebRequire(globalRequire)
 
         -- Derive the base path for the URL
         local basePath = getBasePath(url)
-        print(basePath)
 
         -- Define the custom header to be added to each script
         local header = string.format([[
@@ -60,6 +59,7 @@ local function createWebRequire(globalRequire)
         local modified_script = header .. "\n" .. script_content
 
         -- Load and execute the modified script
+        print(modified_script)
         local script_chunk, load_err = loadstring(modified_script)
         if not script_chunk then
             error("Failed to load script: " .. load_err)
