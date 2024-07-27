@@ -1,5 +1,3 @@
--- webrequire.lua
-
 -- Global table to cache loaded scripts
 local loadedScripts = {}
 
@@ -8,25 +6,13 @@ local function getBasePath(url)
     return url:match("(.-)[^/]+$")
 end
 
--- Function to convert dot notation to forward slashes and ensure .lua extension
+-- Function to convert dot notation to forward slashes
 local function convertToPath(module)
-    -- Strip .lua extension if it exists
-    local hasLuaExtension = module:match("%.lua$")
-    if hasLuaExtension then
-        module = module:sub(1, -5)
-    end
-    
-    -- Convert dot notation to forward slashes
-    local path = module:gsub("%.", "/")
-    
-    -- Add .lua extension back
-    path = path .. ".lua"
-    
-    return path
+    return module:gsub("%.", "/")
 end
 
 -- Function to create a custom webrequire function
-local function new(globalRequire)
+local function createWebRequire(globalRequire)
     -- Custom webrequire function
     local function webrequire(module)
         -- Convert the module name to a URL-friendly path
@@ -42,6 +28,7 @@ local function new(globalRequire)
 
         -- Derive the base path for the URL
         local basePath = getBasePath(url)
+        print(basePath)
 
         -- Define the custom header to be added to each script
         local header = string.format([[
@@ -91,4 +78,4 @@ local function new(globalRequire)
 end
 
 -- Return the function to create a webrequire function
-return new
+return createWebRequire
