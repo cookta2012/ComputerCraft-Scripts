@@ -9,7 +9,7 @@ end
 
 local function dump(data)
     local file = io.open("dump.bin","w")
-    file:write(textutils.seralise(data))
+    file:write(textutils.serailise(data))
     file:close()
 end
 
