@@ -8,7 +8,7 @@ local function getBasePath(url)
 end
 
 local function dump(data)
-    local file:open("dump.bin","w")
+    local file = io.open("dump.bin","w")
     file:write(textutils.seralise(data))
     file:close()
 end
