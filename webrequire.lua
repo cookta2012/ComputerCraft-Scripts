@@ -1,4 +1,3 @@
----------------------- Bignwarning haked
 -- Global table to cache loaded scripts
 local loadedScripts = {}
 
@@ -7,78 +6,126 @@ local function getBasePath(url)
     return url:match("(.-)[^/]+$")
 end
 
+local function getModuleFromURL(url)
+    return url:match("/([^%s/]+)[%.lua]?$")
+end
+
+local function getModuleFromURLLUA(url)
+    return url:match("/([^%s/]+)%.lua$")
+end
+
+local function split(inputstr, sep)
+    if sep == nil then
+        sep = "%s"
+    end
+    local t = {}
+    for str in string.gmatch(inputstr, "([^" .. sep .. "]+)") do
+        table.insert(t, str)
+    end
+    return t
+end
+
+
 local function dump(data)
-    local file = io.open("dump.bin","w")
-    file:write(textutils.serialise(data))
+    local file = io.open("dump.lua", "w")
+    file:write(data)
     file:close()
 end
 
--- Function to convert dot notation to forward slashes
+-- Function to convert dot notation to forward slashes and ensure .lua extension
 local function convertToPath(module)
-    return module:gsub("%.", "/")
+    -- Strip .lua extension if it exists
+    local hasLuaExtension = module:match("%.lua$")
+    if hasLuaExtension then
+        module = module:sub(1, -5)
+    end
+    -- Add .lua extension back
+    module = module .. ".lua"
+    
+    return module
 end
 
 -- Function to create a custom webrequire function
 local function createWebRequire(globalRequire)
     -- Custom webrequire function
-    local function webrequire(module)
+    local function webrequire(module,data)
+        local module = module
+
+        local modulename = getModuleFromURL(module)
+        --print(modulename)
+
+
         -- Convert the module name to a URL-friendly path
-        local url = module
-        if not url:match("^http") then
-            url = convertToPath(module)
+        if loadedScripts[modulename] then
+            return loadedScripts[modulename]
         end
-
-        -- Check if the script is already cached
-        if loadedScripts[url] then
-            return loadedScripts[url]
-        end
-
-        -- Derive the base path for the URL
-        local basePath = getBasePath(url)
-
-        -- Define the custom header to be added to each script
-        local header = string.format([[
-            local basePath = %q
-            local global_require = ...
-            local function modified_require(module)
-                module = module:gsub("%%.", "/") -- Convert dot notation to forward slashes
-                if module:sub(1, 4) == "http" or module:sub(1, 1) == "/" then
-                    return global_require(module)
-                else
-                    return global_require(basePath .. module)
-                end
-            end
-            require = modified_require
-        ]], basePath)
-
-        -- Try to fetch the script from the given URL
-        local response = http.get(url)
-        if not response then
-            -- If fetching fails, fall back to the regular require
-            return globalRequire(module)
-        end
-
-        -- Read the script content
-        local script_content = response.readAll()
-        response.close()
-
-        -- Prepend the header to the script content
-        local modified_script = header .. "\n" .. script_content
-
-        -- Load and execute the modified script
-        dump(modified_script)
-        local script_chunk, load_err = loadstring(modified_script)
-        if not script_chunk then
-            error("Failed to load script: " .. load_err)
-        end
-
-        -- Execute the script, passing the global require function
-        local result = script_chunk(globalRequire)
 
         -- Cache the result
-        loadedScripts[url] = result
+        local status, instance_or_err = pcall(globalRequire,modulename)
+        if status then
+            loadedScripts[modulename] = instance_or_err
+            return loadedScripts[modulename]
+        end
+        -- regex for getting the name of the module
+        -- \/(.*[^\s])(:?\.lua)?
 
-        return result
+        do
+            -- Define the custom header to be added to each script
+            local header = string.format([[
+                local basePath = %q or ""
+                local global_require = ...
+                local function getBasePath(url)
+                    return url:match("https?(.-)[^/]+$")
+                end
+                local function modified_require(module)
+                    if getBasePath(module) then
+                        --print("Path Found")
+                        --print(module)
+                        return global_require(module)
+                    end
+                    return global_require(basePath .. module)
+                end
+                require = modified_require
+            ]], getBasePath(module))
+
+            local mmodule = module
+
+            if getModuleFromURLLUA(module) == nil then
+                local base = getBasePath(mmodule)
+                local parts = split(modulename,".")
+                mmodule = base .. table.concat(parts, ".", 2, #parts):gsub("%.", "/")
+                mmodule = mmodule .. ".lua"
+                --io.open("link.txt","w"):write(mmodule):close()
+            end
+            --print(mmodule)
+
+            -- Try to fetch the script from the given URL
+            local response = http.get(mmodule)
+            if not response or (response.getResponseCode() ~= 200) then
+                -- If fetching fails, fall back to the regular require
+                error("Url: " .. mmodule .. " returned nil")
+            end
+            -- Read the script content
+            local script_content = response.readAll()
+            response.close()
+
+            -- Prepend the header to the script content
+            local modified_script = header .. "\n" .. script_content
+            -- Load and execute the modified script
+            --dump(modified_script)
+            local script_chunk, load_err = load(modified_script)
+            if not script_chunk then
+                error("Failed to load script: " .. url .. "\r\n" .. load_err)
+            end
+
+            -- Execute the script, passing the global require function
+            local status, instance_or_err = true, script_chunk(webrequire)
+            if status then
+                loadedScripts[modulename] = instance_or_err
+                return loadedScripts[modulename]
+            end
+        end
+        assert(false, "We should never reach this")
     end
 
     return webrequire
