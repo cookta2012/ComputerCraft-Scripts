@@ -6,19 +6,17 @@
 --header for use
 local wrv2
 if not fs.exist("/lib/wrv2.lua") then
-    local script = http.get("https://cookta2012.com/minecraft/cc/wrv2.lua")
+    local script = http.get("https://raw.githubusercontent.com/cookta2012/ComputerCraft-Scripts/main/lib/wrv2.lua")
     wrv2 = loadstring(script.readAll())()
 else
     wrv2 = require "lib.wrv2"
 end
 require = wrv2.make(_ENV, "/", "from_web_to_file", 
-{"https://cookta2012.com/minecraft/cc/",
+{"https://raw.githubusercontent.com/cookta2012/ComputerCraft-Scripts/main/",
 "https://raw.githubusercontent.com/migeyel/ccryptolib/main/",
 "https://raw.githubusercontent.com/Wendelstein7/DiscordHook-CC/master/"})
 require("lib.wrv2") -- this saves a copy to disk
-
 require("DiscordHook")
-
 --]]
 
 local expect = require and require("cc.expect") or dofile("rom/modules/main/cc/expect.lua")
