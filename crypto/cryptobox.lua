@@ -1,3 +1,4 @@
+local script_version = "1.0"
 -- Import necessary modules
 
 local x25519 = require  "ccryptolib.x25519"

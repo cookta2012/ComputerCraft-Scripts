@@ -1,3 +1,5 @@
+local script_version = "1.0"
+
 -- SPDX-FileCopyrightText: 2017 Daniel Ratcliffe
 --
 -- SPDX-License-Identifier: LicenseRef-CCPL
@@ -8,14 +10,15 @@ local wrv2
 if not fs.exist("/lib/wrv2.lua") then
     local script = http.get("https://raw.githubusercontent.com/cookta2012/ComputerCraft-Scripts/main/lib/wrv2.lua")
     wrv2 = loadstring(script.readAll())()
-else
-    wrv2 = require "lib.wrv2"
+    require = wrv2.make(_ENV, "/", "from_web_to_file_updater", 
+        {"https://raw.githubusercontent.com/cookta2012/ComputerCraft-Scripts/main/"}) 
 end
-require = wrv2.make(_ENV, "/", "from_web_to_file", 
+wrv2 = require "lib.wrv2"
+require = wrv2.make(_ENV, "/", "from_web_to_file_updater", 
 {"https://raw.githubusercontent.com/cookta2012/ComputerCraft-Scripts/main/",
 "https://raw.githubusercontent.com/migeyel/ccryptolib/main/",
 "https://raw.githubusercontent.com/Wendelstein7/DiscordHook-CC/master/"})
-require("lib.wrv2") -- this saves a copy to disk
+
 require("DiscordHook")
 --]]
 
@@ -98,7 +101,75 @@ local function from_web_to_file(package, env, dir)
         if not fs.exists(filePath) then
             io.open(filePath .. ".lua", "w"):write(sPath):close()
         end
-        return nil, "File Downloaded"
+        local fnFile, sError = loadfile(filePath .. ".lua", nil, env)
+        if fnFile then
+            return fnFile, sPath
+        else
+            return nil, sError
+        end
+    end
+end
+
+local function from_web_to_file_updater(package, env, dir)
+    return function(name)
+        local function ensure_directories(path)
+            -- Get the directory portion of the path (removes the filename part)
+            local dir = fs.getDir(path)
+            
+            -- Split the directory path into components and build it progressively
+            local current_path = ""
+            for part in string.gmatch(dir, "[^/]+") do
+                -- Build up the current directory path
+                current_path = fs.combine(current_path, part)
+                -- If the directory doesn't exist, create it
+                if not fs.exists(current_path) then
+                    print("making dir: "..current_path)
+                    fs.makeDir(current_path)
+                end
+            end
+        end
+        
+        local sPath, sError = package.websearchpath(name, package.path)
+        if not sPath then
+            return nil, sError
+        end
+        local libdir = fs.combine(dir, "lib")
+        if not fs.exists(libdir) then
+            print("making dir: "..libdir)
+            fs.makeDir(libdir)
+        end
+        local sep = expect(3, sep, "string", "nil") or "."
+        local fname = string.gsub(name, sep:gsub("%.", "%%%."), "/")
+        local filePath = fs.combine(libdir, fname)
+        ensure_directories(filePath)
+        filePath = filePath .. ".lua"
+
+        if not fs.exists(filePath) then
+            io.open(filePath, "w"):write(sPath):close()
+        else
+            local script_io = io.open(filePath, "r")
+            local local_version_line = script_io:read()
+            script_io:close()
+
+            local function getVersionNumbers(first_line)
+                local major, minor, patch = first_line:match("local script_version = \"(%d+)%.(%d+)\"")
+                return {tonumber(major) or 0, tonumber(minor) or 0}
+            end
+            local local_version = getVersionNumbers(local_version_line)
+            local sPath1st = string.match(sPath, "([^\n]+)")
+            local script_version = getVersionNumbers(sPath1st)
+            if script_version[1] > local_version[1] or (script_version[1] == local_version[1] and script_version[2] > local_version[2]) then
+                io.open(filePath, "w"):write(sPath):close()
+            end
+
+        end
+
+        local fnFile, sError = loadfile(filePath, nil, env)
+        if fnFile then
+            return fnFile, sPath
+        else
+            return nil, sError
+        end
     end
 end
 
@@ -182,14 +253,12 @@ local function make_require(package)
                 package.loaded[name] = sentinel
                 local result = loader[1](name, table.unpack(loader, 2, loader.n))
                 if result == nil then result = true end
-
                 package.loaded[name] = result
                 return result
             else
                 sError = sError .. "\n  " .. loader[2]
             end
         end
-            io.open("erorr.txt", "a"):write(sError):close()
         error(sError, 2)
     end
 end
@@ -234,7 +303,9 @@ local function make_package(env, dir, priority, webdir)
     package.config = "/\n;\n?\n!\n-"
     package.preload = {}
     if priority == "from_web_to_file" then
-        package.loaders = { preload(package), from_file(package, env), from_web_to_file(package, env, dir), from_file(package, env)}
+        package.loaders = { preload(package), from_file(package, env), from_web_to_file(package, env, dir)}
+    elseif priority == "from_web_to_file_updater" then
+        package.loaders = { preload(package), from_web_to_file_updater(package, env), from_file(package, env)}
     elseif priority == "from_file_or_web" then
         package.loaders = { preload(package), from_file(package, env), from_web(package, env)}
     elseif priority == "from_file" then

@@ -1,3 +1,5 @@
+local script_version = "1.0"
+
 local completion = require("cc.completion")
 local cryptobox = require("crypto.cryptobox")
 
